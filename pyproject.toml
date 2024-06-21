@@ -1,0 +1,20 @@
+[tool.poetry]
+name = "werkpool"
+version = "0.0.1"
+description = "Worker pool in Python with size and rate bounding options"
+authors = ["FlexDW <22373561+FlexDW@users.noreply.github.com>"]
+license = "MIT"
+readme = "README.md"
+packages = [{include ="src"}]
+
+[tool.poetry.dependencies]
+python = "^3.12"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.2.2"
+pytest-asyncio = "^0.23.7"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
