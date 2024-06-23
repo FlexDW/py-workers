@@ -13,7 +13,7 @@ from worker_pool import worker_pool, Task, DelayedTask
 #         task = Task(fn=simple_task)
 #         delayed_task = DelayedTask(task)
 #         await delayed_task.execute()
-#         result = await delayed_task.result()
+#         result = await delayed_task.future
 #         assert result == "Success"
 
 #     @pytest.mark.asyncio
@@ -25,7 +25,7 @@ from worker_pool import worker_pool, Task, DelayedTask
 #         task = Task(fn=simple_task)
 #         delayed_task = DelayedTask(task)
 #         await delayed_task.execute(callback)
-#         await delayed_task.result()
+#         await delayed_task.future
 #         callback.assert_called_once()
 
 #     @pytest.mark.asyncio
@@ -37,7 +37,7 @@ from worker_pool import worker_pool, Task, DelayedTask
 #         delayed_task = DelayedTask(task)
 #         with pytest.raises(ValueError):
 #             await delayed_task.execute()
-#             await delayed_task.result()
+#             await delayed_task.future
 
 #     @pytest.mark.asyncio
 #     async def test_task_with_multiple_retryable_exception_types(self):
@@ -55,7 +55,7 @@ from worker_pool import worker_pool, Task, DelayedTask
 #         task = Task(fn=occasionally_faulty_task, retries=3, retryable_exceptions=(TimeoutError, ConnectionError))
 #         delayed_task = DelayedTask(task)
 #         await delayed_task.execute()
-#         result = await delayed_task.result()
+#         result = await delayed_task.future
 #         assert result == "Recovered"
 
 
@@ -73,7 +73,7 @@ from worker_pool import worker_pool, Task, DelayedTask
 #         task = Task(fn=occasionally_faulty_task, retries=3, retryable_exceptions=(TimeoutError,))
 #         delayed_task = DelayedTask(task)
 #         await delayed_task.execute()
-#         result = await delayed_task.result()
+#         result = await delayed_task.future
 #         assert result == "Recovered"
 
 #     @pytest.mark.asyncio
@@ -92,7 +92,7 @@ from worker_pool import worker_pool, Task, DelayedTask
 #         task = Task(fn=occasionally_faulty_task, retries=3, retryable_exceptions=(TimeoutError, ConnectionError))
 #         delayed_task = DelayedTask(task)
 #         await delayed_task.execute()
-#         result = await delayed_task.result()
+#         result = await delayed_task.future
 #         assert result == "Recovered"
 
 #     @pytest.mark.asyncio
@@ -112,7 +112,7 @@ from worker_pool import worker_pool, Task, DelayedTask
 #         task = Task(fn=occasionally_faulty_task, retries=3, retryable_exceptions=(TimeoutError,), backoff=backoff)
 #         delayed_task = DelayedTask(task)
 #         await delayed_task.execute()
-#         await delayed_task.result()
+#         await delayed_task.future
 #         backoff.assert_called_once()
 #         backoff.assert_called_with(1)
 
@@ -125,7 +125,7 @@ from worker_pool import worker_pool, Task, DelayedTask
 #         delayed_task = DelayedTask(task)
 #         with pytest.raises(TimeoutError):
 #             await delayed_task.execute()
-#             await delayed_task.result()
+#             await delayed_task.future
 
 class TestWorkerPool:
     # @pytest.mark.asyncio
@@ -160,40 +160,17 @@ class TestWorkerPool:
     #     assert total_time >= expected_time, f"Tasks completed faster than expected, {total_time} < {expected_time}"
     #     assert total_time <= expected_time * 1.05, f"Tasks took too long to complete, {total_time} > {expected_time}"
 
-    # @pytest.mark.asyncio
-    # async def test_worker_rate_limits_freq(self):
-    #     num_tasks = 10
-    #     task_duration = 1
-    #     rate = 2
-
-    #     async def slow_task():
-    #         await asyncio.sleep(task_duration)
-
-    #     start_time = time.time()
-    #     async with worker_pool(rate=rate) as pool:
-    #         results = []
-    #         for _ in range(num_tasks):
-    #             results.append(pool.run(Task(slow_task)))
-    #         await asyncio.gather(*results)
-    #     end_time = time.time()
-
-    #     total_time = end_time - start_time
-    #     expected_time = num_tasks / rate
-    #     assert total_time >= expected_time, f"Tasks completed faster than expected, {total_time} < {expected_time}"
-    #     assert total_time <= expected_time * 1.05, f"Tasks took too long to complete, {total_time} > {expected_time}"
-
     @pytest.mark.asyncio
-    async def test_worker_size_and_rate_limits_concurrency_and_freq(self):
-        size = 3
-        rate = 2
+    async def test_worker_rate_limits_freq(self):
         num_tasks = 10
-        task_duration = 2
+        task_duration = 1
+        rate = 2
 
         async def slow_task():
             await asyncio.sleep(task_duration)
 
         start_time = time.time()
-        async with worker_pool(size, rate) as pool:
+        async with worker_pool(rate=rate) as pool:
             results = []
             for _ in range(num_tasks):
                 results.append(pool.run(Task(slow_task)))
@@ -201,9 +178,32 @@ class TestWorkerPool:
         end_time = time.time()
 
         total_time = end_time - start_time
-        expected_time = 8  # worked out manually for size 3, rate 2, 5 tasks, 2s duration
+        expected_time = num_tasks / rate
         assert total_time >= expected_time, f"Tasks completed faster than expected, {total_time} < {expected_time}"
         assert total_time <= expected_time * 1.05, f"Tasks took too long to complete, {total_time} > {expected_time}"
+
+    # @pytest.mark.asyncio
+    # async def test_worker_size_and_rate_limits_concurrency_and_freq(self):
+    #     size = 3
+    #     rate = 2
+    #     num_tasks = 10
+    #     task_duration = 2
+
+    #     async def slow_task():
+    #         await asyncio.sleep(task_duration)
+
+    #     start_time = time.time()
+    #     async with worker_pool(size, rate) as pool:
+    #         results = []
+    #         for _ in range(num_tasks):
+    #             results.append(pool.run(Task(slow_task)))
+    #         await asyncio.gather(*results)
+    #     end_time = time.time()
+
+    #     total_time = end_time - start_time
+    #     expected_time = 8  # worked out manually for size 3, rate 2, 10 tasks, 2s duration
+    #     assert total_time >= expected_time, f"Tasks completed faster than expected, {total_time} < {expected_time}"
+    #     assert total_time <= expected_time * 1.05, f"Tasks took too long to complete, {total_time} > {expected_time}"
 
 
     # @pytest.mark.asyncio

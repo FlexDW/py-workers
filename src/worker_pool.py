@@ -128,8 +128,9 @@ class WorkerPool:
             self._semaphore.release()
 
     async def _next(self):
-        if self._working and self.count < self.size:
+        if self._working and (self.size is None or self.count < self.size):
             if self._queue:
+                self.count += 1
                 task = self._queue.popleft()
                 await self._semaphore.acquire()
                 await task.execute(self._mark_done)
