@@ -44,8 +44,6 @@ class DelayedTask:
                     result = await self.task.fn()
 
                 self.future.set_result(result)
-                if callback:
-                    callback()
                 break
             except Exception as e:
                 if not any(isinstance(e, exc) for exc in self.task.retryable_exceptions):
@@ -56,6 +54,8 @@ class DelayedTask:
                     self.future.set_exception(e)
                     break
                 await asyncio.sleep(self.task.backoff(self.attempts))
+        if callback:
+            callback()
 
 class Semaphore:
     value: int | None
@@ -107,12 +107,16 @@ class WorkerPool:
         self._queue: Deque[DelayedTask] = deque()
         self._has_tasks = asyncio.Event()
         self._accepting = True
-        self._working = True
+        self._shutdown = asyncio.Event()
 
         self._semaphore = Semaphore(ceil(self.rate) if self.rate else None) # ceil: still need capcaity for partial (e.g. 0.5)
         self._wait = 1 / self.rate if self.rate else 0
 
-        self._release_future = asyncio.create_task(self._release(), name=f'{self.__class__.__name__}.{self._release.__name__}')
+        if self.rate:
+            asyncio.create_task(
+                self.rate_limit(),
+                name=f'{self.__class__.__name__}.{self.rate_limit.__name__}'
+            )
 
     def _put_task(self, task: DelayedTask):
         print("############## Put task ##############")
@@ -124,13 +128,23 @@ class WorkerPool:
         self.count -= 1
         asyncio.create_task(self._next())
 
+    async def rate_limit(self):
+        done, pending = await asyncio.wait(
+            self._release(),
+            self._shutdown.wait()
+        )
+
+        for task in pending:
+            task.cancel()
+
     async def _release(self):
         print("############## release ##############")
-
         # only ever called once, at initialization
-        while bool(self.rate) and self._working:
+        while not self._shutdown.is_set():
             print("############## waiting to releasing ##############")
-            await asyncio.gather(asyncio.sleep(self._wait), self._has_tasks.wait())
+            await asyncio.gather(
+                asyncio.sleep(self._wait),
+                asyncio.wait(self._has_tasks.wait(), self._shutdown.wait()))
             print("############## releasing ##############")
             self._semaphore.release()
 
@@ -144,21 +158,15 @@ class WorkerPool:
 
                 self.count += 1
                 task = self._queue.popleft()
-                await self._semaphore.acquire()
-                await task.execute(self._mark_done)
+                await asyncio.wait(self._semaphore.acquire(), self._shutdown.wait())
+                await asyncio.wait(task.execute(self._mark_done), self._shutdown.wait())
             else:
                 print("############## clearing ##############")
                 self._has_tasks.clear()
 
-    async def _break(self):
-        self._working = False
-        self._semaphore.release()
-        self._has_tasks.set()
-        await self._release_future
-
     def run(self, task: Task):
         if not self._accepting:
-            raise RuntimeError("WorkerPool shutdown")
+            raise RuntimeError("WorkerPool has shutdown and not accepting new tasks.")
 
         delayed_task = DelayedTask(task)
         self._put_task(delayed_task)
