@@ -156,7 +156,7 @@ class TestWorkerPool:
     #     end_time = time.time()
 
     #     total_time = end_time - start_time
-    #     expected_time = (num_tasks / size) * task_duration  
+    #     expected_time = (num_tasks / size) * task_duration
     #     assert total_time >= expected_time, f"Tasks completed faster than expected, {total_time} < {expected_time}"
     #     assert total_time <= expected_time * 1.05, f"Tasks took too long to complete, {total_time} > {expected_time}"
 
@@ -167,14 +167,20 @@ class TestWorkerPool:
         rate = 2
 
         async def slow_task():
+            print("############## Task started ##############")
             await asyncio.sleep(task_duration)
 
         start_time = time.time()
         async with worker_pool(rate=rate) as pool:
             results = []
             for _ in range(num_tasks):
+                print("############## Running a task ##############")
                 results.append(pool.run(Task(slow_task)))
+
+            print("############## awaiting all ##############")
             await asyncio.gather(*results)
+            print("############## awaited all ##############")
+
         end_time = time.time()
 
         total_time = end_time - start_time
