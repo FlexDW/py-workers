@@ -7,7 +7,7 @@ Classes:
     WorkerPool: Manages a pool of tasks, enforcing concurrency and rate limits.
 """
 
-__all__ = ["Task", "WorkerPool"]
+__all__ = ["worker_pool", "WorkerPool"]
 
 import asyncio
 from collections import deque
@@ -139,10 +139,35 @@ class WorkerPool:
                 await self._semaphore.acquire()
                 await task.execute(self._mark_done)
 
-    def run(self, task: Task):
+    def run(
+        self,
+        task: Callable[[], Awaitable[Any]],
+        timeout: int | None = None,
+        retries: int = 0,
+        retryable_exceptions: List[type[Exception]] = [Exception],
+        backoff: Callable[[int], float] = lambda attempts: 2**attempts + random.uniform(0, 1),
+        ):
+        """
+        Schedules a new task for execution. The task will be executed asynchronously, with optional
+        timeout and retry settings.
+
+        :param
+            task: the function to be executed asynchronously. This function should be a coroutine, not
+                take any arguments, and return the result of the task.
+            timeout: the maximum number of seconds to wait for the task to complete. If None or not
+                provided, the task will not have a timeout.
+            retries: the maximum number of times to retry the task if it fails. If 0 or not provided,
+                the task will not be retried.
+            retryable_exceptions: a list of exceptions that should trigger a retry. If not provided,
+                all exceptions will trigger a retry.
+            backoff: a function that takes the number of attempts and returns the number of seconds to
+                wait before the next attempt. If not provided, the default backoff strategy will be used:
+                2^attempts + random.uniform(0, 1).
+        """
         if not self._accepting:
             raise RuntimeError("WorkerPool has shutdown and not accepting new tasks.")
 
+        task = Task(task, timeout, retries, retryable_exceptions, backoff)
         delayed_task = DelayedTask(task)
         self._put_task(delayed_task)
         asyncio.create_task(self._next())

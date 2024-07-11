@@ -1,11 +1,12 @@
 [tool.poetry]
 name = "werkpool"
-version = "0.0.1"
+version = "0.1.0"
 description = "Worker pool in Python with size and rate bounding options"
 authors = ["FlexDW <22373561+FlexDW@users.noreply.github.com>"]
 license = "MIT"
 readme = "README.md"
 packages = [{include ="src"}]
+repository = "https://github.com/FlexDW/py-workers"
 
 [tool.poetry.dependencies]
 python = "^3.12"

@@ -134,8 +134,7 @@ class TestWorkerPool:
             return 42
 
         async with worker_pool(size=1) as pool:
-            task = Task(fn=simple_task)
-            result = await pool.run(task)
+            result = await pool.run(simple_task)
             assert result == 42
 
     @pytest.mark.asyncio
@@ -151,7 +150,7 @@ class TestWorkerPool:
         async with worker_pool(size) as pool:
             results = []
             for _ in range(num_tasks):
-                results.append(pool.run(Task(slow_task)))
+                results.append(pool.run(slow_task))
             await asyncio.gather(*results)
         end_time = time.time()
 
@@ -175,7 +174,7 @@ class TestWorkerPool:
             results = []
             for _ in range(num_tasks):
                 print("############## Running a task ##############")
-                results.append(pool.run(Task(slow_task)))
+                results.append(pool.run(slow_task))
 
             print("############## awaiting all ##############")
             await asyncio.gather(*results)
@@ -202,7 +201,7 @@ class TestWorkerPool:
         async with worker_pool(size, rate) as pool:
             results = []
             for _ in range(num_tasks):
-                results.append(pool.run(Task(slow_task)))
+                results.append(pool.run(slow_task))
             await asyncio.gather(*results)
         end_time = time.time()
 
@@ -217,12 +216,11 @@ class TestWorkerPool:
             return 42
 
         async with worker_pool(size=1) as pool:
-            task = Task(fn=simple_task)
-            result = await pool.run(task)
+            result = await pool.run(simple_task)
             assert result == 42
 
         with pytest.raises(RuntimeError):
-            await pool.run(task)
+            await pool.run(simple_task)
 
     @pytest.mark.asyncio
     async def test_worker_pool_completes_all_tasks_before_shutdown(self):
@@ -235,7 +233,7 @@ class TestWorkerPool:
             tasks_exectuded += 1
 
         for _ in range(5):
-            workers.run(Task(slow_task))
+            workers.run(slow_task)
 
         await workers.shutdown()
 
@@ -252,7 +250,7 @@ class TestWorkerPool:
             tasks_exectuded += 1
 
         for _ in range(5):
-            workers.run(Task(slow_task))
+            workers.run(slow_task)
 
         await workers.kill()
 
