@@ -14,7 +14,7 @@ from collections import deque
 from contextlib import asynccontextmanager
 from math import ceil
 import random
-from typing import Any, Awaitable, Callable, Deque, List, NamedTuple, Optional
+from typing import Any, AsyncGenerator, Awaitable, Callable, Deque, List, NamedTuple, Optional
 
 
 class Task(NamedTuple):
@@ -58,6 +58,7 @@ class DelayedTask:
             if callback:
                 callback()
 
+
 class Semaphore:
     value: int | None
     semaphore: asyncio.Semaphore | None
@@ -74,6 +75,7 @@ class Semaphore:
     def release(self):
         if self.value:
             return self.semaphore.release()
+
 
 class WorkerPool:
     size: int | None
@@ -109,14 +111,9 @@ class WorkerPool:
         self._accepting = True
         self._shutdown = False
 
-        self._semaphore = Semaphore(ceil(self.rate) if self.rate else None) # ceil: still need capcaity for partial (e.g. 0.5)
-        self._wait = 1 / self.rate if self.rate else 0
-
-        if self.rate:
-            self.release_future = asyncio.create_task(
-                self._release(),
-                name=f'{self.__class__.__name__}.{self._release.__name__}'
-            )
+        # ceil: still need capcaity for partial (e.g. 0.5)
+        self._semaphore = Semaphore(ceil(self.rate) if self.rate else None)
+        self._wait = 1 / self.rate if self.rate else None
 
     def _put_task(self, task: DelayedTask):
         self._queue.append(task)
@@ -126,10 +123,12 @@ class WorkerPool:
         asyncio.create_task(self._next())
 
     async def _release(self):
-        # only ever called once, at initialization
-        while not self._shutdown:
-            await asyncio.sleep(self._wait)
-            self._semaphore.release()
+        if not self._releasing:
+            self._releasing = True
+            while self._queue.count() > 0:
+                self._semaphore.release()
+                await asyncio.sleep(self._wait)
+            self._releasing = False
 
     async def _next(self):
         if not self._shutdown and (self.size is None or self.count < self.size):
@@ -139,14 +138,14 @@ class WorkerPool:
                 await self._semaphore.acquire()
                 await task.execute(self._mark_done)
 
-    def run(
-        self,
-        task: Callable[[], Awaitable[Any]],
-        timeout: int | None = None,
-        retries: int = 0,
-        retryable_exceptions: List[type[Exception]] = [Exception],
-        backoff: Callable[[int], float] = lambda attempts: 2**attempts + random.uniform(0, 1),
-        ):
+    def run[T](
+            self,
+            task: Callable[[], Awaitable[T]],
+            timeout: int | None = None,
+            retries: int = 0,
+            retryable_exceptions: List[type[Exception]] = [Exception],
+            backoff: Callable[[int], float] = lambda attempts: 2**attempts + random.uniform(0, 1),
+            ) -> asyncio.Future[T]:
         """
         Schedules a new task for execution. The task will be executed asynchronously, with optional
         timeout and retry settings.
@@ -170,6 +169,8 @@ class WorkerPool:
         task = Task(task, timeout, retries, retryable_exceptions, backoff)
         delayed_task = DelayedTask(task)
         self._put_task(delayed_task)
+        if self.rate:
+            asyncio.create_task(self._release())
         asyncio.create_task(self._next())
         return delayed_task.future
 
@@ -189,8 +190,9 @@ class WorkerPool:
             task = self._queue.popleft()
             task.future.set_exception(asyncio.CancelledError("WorkerPool shutdown"))
 
+
 @asynccontextmanager
-async def worker_pool(size: int | None = None, rate: float | None = None):
+async def worker_pool(size: int | None = None, rate: float | None = None) -> AsyncGenerator[WorkerPool, None]:
     try:
         workers = WorkerPool(size, rate)
         yield workers

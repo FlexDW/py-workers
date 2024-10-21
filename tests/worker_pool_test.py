@@ -2,7 +2,7 @@ from unittest.mock import Mock
 import asyncio
 import time
 import pytest
-from src.worker_pool import WorkerPool, worker_pool, Task, DelayedTask
+from werkpool import WorkerPool, worker_pool, Task, DelayedTask
 
 class TestDelayedTask:
     @pytest.mark.asyncio

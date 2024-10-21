@@ -5,7 +5,7 @@ description = "Worker pool in Python with size and rate bounding options"
 authors = ["FlexDW <22373561+FlexDW@users.noreply.github.com>"]
 license = "MIT"
 readme = "README.md"
-packages = [{include ="src"}]
+packages = [{include ="werkpool"}]
 repository = "https://github.com/FlexDW/py-workers"
 
 [tool.poetry.dependencies]
