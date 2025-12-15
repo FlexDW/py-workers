@@ -106,10 +106,11 @@ class WorkerPool:
 
         self.size = size
         self.rate = rate
-        self.count = 0
+        self._executing: List[DelayedTask] = []
         self._queue: Deque[DelayedTask] = deque()
         self._accepting = True
         self._shutdown = False
+        self._releasing = False
 
         # ceil: still need capcaity for partial (e.g. 0.5)
         self._semaphore = Semaphore(ceil(self.rate) if self.rate else None)
@@ -118,25 +119,26 @@ class WorkerPool:
     def _put_task(self, task: DelayedTask):
         self._queue.append(task)
 
-    def _mark_done(self):
-        self.count -= 1
-        asyncio.create_task(self._next())
+    def _mark_done(self, task: DelayedTask):
+        self._executing.remove(task)
+        if not self._shutdown:
+            asyncio.create_task(self._next())
 
     async def _release(self):
         if not self._releasing:
             self._releasing = True
-            while self._queue.count() > 0:
-                self._semaphore.release()
+            while not self._shutdown and (len(self._executing) > 0 or len(self._queue) > 0):
                 await asyncio.sleep(self._wait)
+                self._semaphore.release()
             self._releasing = False
 
     async def _next(self):
-        if not self._shutdown and (self.size is None or self.count < self.size):
+        if not self._shutdown and (self.size is None or len(self._executing) < self.size):
             if self._queue:
-                self.count += 1
                 task = self._queue.popleft()
+                self._executing.append(task)
                 await self._semaphore.acquire()
-                await task.execute(self._mark_done)
+                await task.execute(lambda: self._mark_done(task))
 
     def run[T](
             self,
@@ -176,16 +178,28 @@ class WorkerPool:
 
     async def shutdown(self):
         self._accepting = False
-        await asyncio.gather(*[task.future for task in self._queue])
+        await asyncio.gather(
+            *[task.future for task in self._executing],
+            *[task.future for task in self._queue],
+            return_exceptions=True
+        )
         self._shutdown = True
-        if self.rate:
-            self.release_future.cancel()
+        
+        # Wait for background _release() tasks to notice shutdown and exit cleanly
+        # This prevents "Task was destroyed but it is pending" warnings
+        while self._releasing:
+            await asyncio.sleep(0.01)
 
     async def kill(self):
         self._accepting = False
         self._shutdown = True
-        if self.rate:
-            self.release_future.cancel()
+        
+        # Cancel executing tasks
+        for task in self._executing:
+            if not task.future.done():
+                task.future.set_exception(asyncio.CancelledError("WorkerPool shutdown"))
+        
+        # Cancel queued tasks
         while self._queue:
             task = self._queue.popleft()
             task.future.set_exception(asyncio.CancelledError("WorkerPool shutdown"))

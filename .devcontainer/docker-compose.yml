@@ -1,6 +1,5 @@
 services:
   workers:
-    # image: python:3.12-bullseye
     build:
       context: ../
       dockerfile: ./.devcontainer/Dockerfile
@@ -8,7 +7,7 @@ services:
       - seccomp:unconfined
     entrypoint: /bin/sh -c "while sleep 1000; do :; done"
     environment:
-      - POETRY_PYPI_TOKEN_PYPI
+      - POETRY_PYPI_TOKEN_PYPI # Add this to .env file inside .devcontainer folder
     volumes:
       - ../:/py-workers
       - /var/run/docker.sock:/var/run/docker.sock

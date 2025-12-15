@@ -166,19 +166,15 @@ class TestWorkerPool:
         rate = 2
 
         async def slow_task():
-            print("############## Task started ##############")
             await asyncio.sleep(task_duration)
 
         start_time = time.time()
         async with worker_pool(rate=rate) as pool:
             results = []
             for _ in range(num_tasks):
-                print("############## Running a task ##############")
                 results.append(pool.run(slow_task))
 
-            print("############## awaiting all ##############")
             await asyncio.gather(*results)
-            print("############## awaited all ##############")
 
         end_time = time.time()
 

@@ -4,7 +4,7 @@
     "service": "workers",
     "workspaceFolder": "/py-workers",
     "shutdownAction": "stopCompose",
-    "postCreateCommand": "poetry shell",
+    "postCreateCommand": ".devcontainer/postCreate.sh",
     "customizations": {
         "vscode": {
             "extensions": [

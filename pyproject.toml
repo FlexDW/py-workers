@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "werkpool"
-version = "0.1.0"
+version = "0.2.0"
 description = "Worker pool in Python with size and rate bounding options"
 authors = ["FlexDW <22373561+FlexDW@users.noreply.github.com>"]
 license = "MIT"
